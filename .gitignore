@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.cache/
+.npm-cache/
+.env
+.env.*
+!.env.example
+coverage/
+*.log
+.DS_Store
+Thumbs.db
+data/cutouts/**/*.png
+!data/cutouts/.gitkeep
