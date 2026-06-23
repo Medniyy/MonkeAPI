@@ -39,15 +39,6 @@ describe("MonkeAPI", () => {
             ? input
             : new URL(typeof input === "string" ? input : input.url);
         fetchCalls.push(url);
-        if (url.hostname === "permagate.io") {
-          return new Response(null, {
-            status: 302,
-            headers: {
-              location:
-                "https://example-transaction.permagate.io/original.jpg",
-            },
-          });
-        }
         return new Response(new Uint8Array(PNG), {
           status: 200,
           headers: { "content-type": "image/png" },
@@ -103,7 +94,7 @@ describe("MonkeAPI", () => {
     expect(response.json().error.code).toBe("TOKEN_NOT_FOUND");
   });
 
-  it("proxies images with canvas-safe headers and rewrites Arweave", async () => {
+  it("proxies gen2 Arweave art through the Magic Eden image CDN with canvas-safe headers", async () => {
     const first = await app.inject({
       method: "GET",
       url: "/img/gen2/1.png",
@@ -120,11 +111,15 @@ describe("MonkeAPI", () => {
     expect(first.headers["content-type"]).toBe("image/png");
     expect(first.headers["x-cache"]).toBe("MISS");
     expect(second.headers["x-cache"]).toBe("HIT");
-    expect(fetchCalls).toHaveLength(2);
-    expect(fetchCalls[0]?.hostname).toBe("permagate.io");
-    expect(fetchCalls[1]?.hostname).toBe(
-      "example-transaction.permagate.io",
+    // Only the first request hits upstream; the second is served from cache.
+    expect(fetchCalls).toHaveLength(1);
+    expect(fetchCalls[0]?.hostname).toBe("img-cdn.magiceden.dev");
+    // The raw Arweave tx is wrapped (URL-encoded) inside the CDN path, PNG-forced.
+    const cdnPath = fetchCalls[0]?.pathname ?? "";
+    expect(decodeURIComponent(cdnPath)).toContain(
+      "https://arweave.net/example-transaction",
     );
+    expect(cdnPath.endsWith("@png")).toBe(true);
   });
 
   it("supports conditional image requests", async () => {
@@ -197,6 +192,11 @@ function testConfig(directory: string): AppConfig {
     maxImageBytes: 1024 * 1024,
     rateLimitMax: 1_000,
     rateLimitWindow: "1 minute",
-    allowedImageHosts: new Set(["permagate.io", "gateway.irys.xyz"]),
+    allowedImageHosts: new Set([
+      "img-cdn.magiceden.dev",
+      "arweave.net",
+      "permagate.io",
+      "gateway.irys.xyz",
+    ]),
   };
 }

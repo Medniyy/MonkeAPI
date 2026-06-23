@@ -29,7 +29,7 @@ const envSchema = z.object({
   ALLOWED_IMAGE_HOSTS: z
     .string()
     .default(
-      "permagate.io,gateway.irys.xyz,datasprite-cdn.com,arweave.net,cdn.helius-rpc.com,ipfs.io,nftstorage.link",
+      "img-cdn.magiceden.dev,permagate.io,gateway.irys.xyz,datasprite-cdn.com,arweave.net,cdn.helius-rpc.com,ipfs.io,nftstorage.link",
     ),
   CUTOUT_SERVICE_URL: optionalUrl,
   CUTOUT_SERVICE_TOKEN: z.string().min(1).optional(),

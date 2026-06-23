@@ -3,6 +3,25 @@ import type { FetchedImage } from "./image-types.js";
 
 const MAX_REDIRECTS = 4;
 
+/**
+ * Arweave's own gateways (arweave.net, permagate.io) intermittently 403/502/time
+ * out when fetched from our Railway egress, which silently breaks gen2 art.
+ * Magic Eden's image CDN re-serves the same Arweave tx from a global edge with
+ * canvas-safe CORS (access-control-allow-origin: *) and immutable caching, so we
+ * route Arweave images through it. The trailing `@png` forces a single
+ * universally decodable format — the CDN otherwise content-negotiates AVIF on
+ * the Accept header, and since we cache one variant and serve it to every
+ * client, an AVIF cache entry would break clients that can't decode AVIF.
+ */
+const ARWEAVE_IMAGE_CDN = "https://img-cdn.magiceden.dev/rs:fill:800:0:0/plain/";
+
+function routeArweaveThroughCdn(url: URL): URL {
+  if (url.hostname.toLowerCase() !== "arweave.net") {
+    return url;
+  }
+  return new URL(`${ARWEAVE_IMAGE_CDN}${encodeURIComponent(url.toString())}@png`);
+}
+
 const SUPPORTED_CONTENT_TYPES = new Set([
   "image/png",
   "image/jpeg",
@@ -29,23 +48,20 @@ export class UpstreamImageService {
     let normalized = source.trim();
 
     if (normalized.startsWith("ar://")) {
-      normalized = `https://permagate.io/${normalized.slice(5)}`;
+      normalized = `https://arweave.net/${normalized.slice(5)}`;
     } else if (normalized.startsWith("ipfs://")) {
       normalized = `https://ipfs.io/ipfs/${normalized.slice(7)}`;
     }
 
-    const url = new URL(normalized);
-    if (url.protocol !== "https:" && url.protocol !== "http:") {
+    const parsed = new URL(normalized);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
       throw new UpstreamError(
         "UNSUPPORTED_IMAGE_URL",
         "The indexed image uses an unsupported URL scheme.",
       );
     }
 
-    if (url.hostname.toLowerCase() === "arweave.net") {
-      url.hostname = "permagate.io";
-    }
-
+    const url = routeArweaveThroughCdn(parsed);
     this.assertAllowed(url);
     return url;
   }
